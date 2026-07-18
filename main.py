@@ -6,7 +6,27 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 import os
+import time
 
+def bloquear(segundos_bloqueio):
+    horario_liberacao = time.time() + segundos_bloqueio
+    with open("bloqueio.txt", "w") as arquivo:
+        arquivo.write(str(horario_liberacao))
+
+def verificar_bloqueio():
+    if not os.path.exists("bloqueio.txt"):
+        return 0
+    with open("bloqueio.txt", "r") as arquivo:
+        horario_liberacao = float(arquivo.read())
+
+    segundos_restantes = horario_liberacao - time.time()
+
+    if segundos_restantes > 0:
+        return segundos_restantes
+    else:
+        os.remove("bloqueio.txt")
+        return 0
+    
 def gerar_chave(senha_mestra, salt):
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -69,13 +89,25 @@ def adicionar_senha(site, usuario, senha):
     cofre.append(nova_entrada)
     print("Senha adicionada com sucesso!")
 
+segundos_restantes = verificar_bloqueio()
+if segundos_restantes > 0:
+    print("Muitas tentativas erradas. Tente novamente em", int(segundos_restantes)) 
+    exit()
+    
+tentativas = 0
+
 while True:
     senha_mestra = input("Digite sua senha mestra:")
     try:
         cofre = descriptografar_cofre(senha_mestra)
         break
     except InvalidToken:
-        print("Senha mestra incorreta. Tente novamente.")
+        tentativas = tentativas + 1
+        print("Senha mestra incorreta. Tentativas restantes:", 3 - tentativas)
+        if tentativas >= 3:
+            print("Número máximo de tentativas aingido. Bloqueando por 60 segundos...")
+            bloquear(60)
+            exit()
 
 rodando = True
 
