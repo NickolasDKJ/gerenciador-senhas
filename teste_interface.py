@@ -42,15 +42,15 @@ def abrir_tela_principal (senha_mestra):
     titulo = tk.Label(tela_principal, text="Bem-vindo ao seu cofre!")
     titulo.pack(pady=10)
 
-    botao_adicionar = tk.Button(tela_principal, text="Adicionar Senha", command=lambda: janela_adicionar(tela_principal))
+    botao_adicionar = tk.Button(tela_principal, text="Adicionar Senha", command=lambda: janela_adicionar(tela_principal, senha_mestra))
     botao_adicionar.pack(pady=5)
 
-    botao_listar = tk.Button(tela_principal, text="Listar Senhas")
+    botao_listar = tk.Button(tela_principal, text="Listar Senhas", command=lambda: janela_listar(tela_principal))
     botao_listar.pack(pady=5)
     
     tela_principal.mainloop()
 
-def janela_adicionar(pai):
+def janela_adicionar(pai, senha_mestra):
     popup = tk.Toplevel(pai)
     popup.title("Adicionar Senha")
     popup.geometry("300x250")
@@ -73,10 +73,37 @@ def janela_adicionar(pai):
         senha_gerada = gerar_senha()
         campo_senha_nova.delete(0, tk.END)
         campo_senha_nova.insert(0, senha_gerada)
+
+    def salvar():
+        site = campo_site.get()
+        usuario = campo_usuario.get()
+        senha = campo_senha_nova.get() 
+        if ja_existe(site, usuario):
+            aviso.config(text="Já exite cadastro para esse site/usuário!")
+        else:
+            adicionar_senha(site, usuario, senha)
+            criptografar_cofre(senha_mestra)
+            aviso.config(text="Senha salva com sucesso!")
+
+    botao_salvar = tk.Button(popup, text="Salvar", command=salvar)
+    botao_salvar.pack(pady=5)
+
     
     botao_gerar = tk.Button(popup, text="Gerar senha", command=gerar)
     botao_gerar.pack(pady=5)
     
+def janela_listar(pai):
+    popup = tk.Toplevel(pai)
+    popup.title("Suas senhas")
+    popup.geometry("350x300")
+
+    if len(cofre) == 0:
+        tk.Label(popup, text="Nenhuma senha cadastrada ainda.").pack()
+    else:
+        for item in cofre:
+            texto = item["site"] + " - " + item["usuario"] + " - " + item["senha"]
+            tk.Label(popup, text=texto).pack(anchor="w")
+
 def bloquear(segundos_bloqueio):
     horario_liberacao = time.time() + segundos_bloqueio
     with open("bloqueio.txt", "w") as arquivo:
