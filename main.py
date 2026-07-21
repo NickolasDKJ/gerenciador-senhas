@@ -1,3 +1,4 @@
+import tkinter as tk
 import json
 import secrets 
 import string
@@ -8,10 +9,121 @@ import base64
 import os
 import time
 
+tentativas = 0
+
+def tentar_entrar():
+    global tentativas, cofre
+
+    segundos_restantes = verificar_bloqueio()
+    if segundos_restantes > 0:
+        atualizar_contador()
+        return
+
+    senha_digitada = campo_senha.get()
+    try:
+        cofre = descriptografar_cofre(senha_digitada)
+        janela.destroy()
+        abrir_tela_principal(senha_digitada)
+    except InvalidToken:
+        tentativas = tentativas + 1
+        restantes = 3 - tentativas
+        if restantes <= 0:
+            bloquear(60)
+            atualizar_contador()
+        else:
+            mensagem.config(text="Senha incorreta. Tentativas restantes: " + str(restantes))
+
+
+def abrir_tela_principal (senha_mestra):
+    tela_principal = tk.Tk()
+    tela_principal.title("Gerenciador de Senhas")
+    tela_principal.geometry("400x300")
+
+    titulo = tk.Label(tela_principal, text="Bem-vindo ao seu cofre!")
+    titulo.pack(pady=10)
+
+    botao_adicionar = tk.Button(tela_principal, text="Adicionar Senha", command=lambda: janela_adicionar(tela_principal, senha_mestra))
+    botao_adicionar.pack(pady=5)
+
+    botao_listar = tk.Button(tela_principal, text="Listar Senhas", command=lambda: janela_listar(tela_principal))
+    botao_listar.pack(pady=5)
+    
+    tela_principal.mainloop()
+
+def janela_adicionar(pai, senha_mestra):
+    popup = tk.Toplevel(pai)
+    popup.title("Adicionar Senha")
+    popup.geometry("300x250")
+
+    tk.Label(popup, text="Site:").pack()
+    campo_site = tk.Entry(popup)
+    campo_site.pack()
+
+    tk.Label(popup, text="Usuário:").pack()
+    campo_usuario = tk.Entry(popup)
+    campo_usuario.pack()
+
+    tk.Label(popup, text="Senha:").pack()
+    campo_senha_nova = tk.Entry(popup)
+    campo_senha_nova.pack()
+
+    aviso = tk.Label(popup, text="")
+    aviso.pack()
+    def gerar():
+        senha_gerada = gerar_senha()
+        campo_senha_nova.delete(0, tk.END)
+        campo_senha_nova.insert(0, senha_gerada)
+
+    def salvar():
+        site = campo_site.get()
+        usuario = campo_usuario.get()
+        senha = campo_senha_nova.get() 
+        if ja_existe(site, usuario):
+            aviso.config(text="Já exite cadastro para esse site/usuário!")
+        else:
+            adicionar_senha(site, usuario, senha)
+            criptografar_cofre(senha_mestra)
+            aviso.config(text="Senha salva com sucesso!")
+
+    botao_salvar = tk.Button(popup, text="Salvar", command=salvar)
+    botao_salvar.pack(pady=5)
+
+    
+    botao_gerar = tk.Button(popup, text="Gerar senha", command=gerar)
+    botao_gerar.pack(pady=5)
+    
+def janela_listar(pai):
+    popup = tk.Toplevel(pai)
+    popup.title("Suas senhas")
+    popup.geometry("400x300")
+
+    if len(cofre) == 0:
+        tk.Label(popup, text="Nenhuma senha cadastrada ainda.").pack()
+    else:
+        for item in cofre:
+            linha = tk.Frame(popup)
+            linha.pack(fill="x", pady=2)
+
+            texto = item["site"] + " - " + item["usuario"] + " - " + item["senha"]
+            tk.Label(linha, text=texto, anchor="w").pack(side="left", fill="x", expand=True)
+
+            def copiar(senha=item["senha"]):
+                popup.clipboard_clear()
+                popup.clipboard_append(senha)
+            tk.Button(linha, text="Copiar", command=copiar).pack(side="right")
+
 def bloquear(segundos_bloqueio):
     horario_liberacao = time.time() + segundos_bloqueio
     with open("bloqueio.txt", "w") as arquivo:
         arquivo.write(str(horario_liberacao))
+
+def atualizar_contador():
+    segundos = verificar_bloqueio()
+    if segundos >0:
+        mensagem.config(text="Bloqueio. Tente em " + str(int(segundos)) + "s.")
+        janela.after(1000, atualizar_contador)  # chama de novo em 1 segundo
+    else:
+        mensagem.config(text="Pode tentar novamente.")
 
 def verificar_bloqueio():
     if not os.path.exists("bloqueio.txt"):
@@ -89,60 +201,21 @@ def adicionar_senha(site, usuario, senha):
     cofre.append(nova_entrada)
     print("Senha adicionada com sucesso!")
 
-segundos_restantes = verificar_bloqueio()
-if segundos_restantes > 0:
-    print("Muitas tentativas erradas. Tente novamente em", int(segundos_restantes)) 
-    exit()
-    
-tentativas = 0
 
-while True:
-    senha_mestra = input("Digite sua senha mestra:")
-    try:
-        cofre = descriptografar_cofre(senha_mestra)
-        break
-    except InvalidToken:
-        tentativas = tentativas + 1
-        print("Senha mestra incorreta. Tentativas restantes:", 3 - tentativas)
-        if tentativas >= 3:
-            print("Número máximo de tentativas aingido. Bloqueando por 60 segundos...")
-            bloquear(60)
-            exit()
+janela = tk.Tk()
+janela.title("Login - Gerenciador de Senhas")
+janela.geometry("300x150")
 
-rodando = True
+label_senha = tk.Label(janela, text="Senhas mestra:")
+label_senha.pack()
 
-while rodando:
-    print("=== Gerenciador de Senhas ===")
-    print("1 - Adicionar senha")
-    print("2 - Listar senhas")
-    print("3 - Sair")
+campo_senha = tk.Entry(janela, show="*")
+campo_senha.pack()
 
-    opcao = input("Escolha uma opção: ")
+botao_entrar = tk.Button(janela, text="Entrar", command=tentar_entrar)
+botao_entrar.pack()
 
-    if opcao == "1":
-        site = input("Site: ")
-        usuario = input("Usuário: ")
+mensagem = tk.Label(janela, text="")
+mensagem.pack()
 
-        if ja_existe(site, usuario):
-            print("Já existe uma senha cadastrada para esse usuário nesse site!")
-        else:
-            escolha_senha = input("Digite (1) para gerar senha automática ou (2) para digitar a sua: ")
-            if escolha_senha == "1":
-                senha = gerar_senha()
-                print("Senha gerada")
-            else:
-                senha = input("Senha: ")
-
-            adicionar_senha(site, usuario, senha)
-            criptografar_cofre(senha_mestra)
-    elif opcao == "2":
-        if len(cofre) == 0:
-            print("Nenhuma senha cadastrada ainda.")
-        else:
-            for item in cofre:
-                print(item["site"], "-", item["usuario"], "-", item["senha"])
-    elif opcao == "3":
-        print("Saindo...")
-        rodando = False
-    else:
-        print("Opção inválida")
+janela.mainloop()
